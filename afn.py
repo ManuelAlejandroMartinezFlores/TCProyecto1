@@ -177,14 +177,16 @@ class NFA:
             else:
                 node_colors.append('skyblue')  # Estado
         
-        nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=700)
+        nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=300)
+
+        nx.draw_networkx_edges(G, pos, arrowstyle='->', arrowsize=20, connectionstyle='arc3,rad=0.2')
         
-        edge_labels = {}
-        for u, v, data in G.edges(data=True):
-            edge_labels[(u, v)] = data['label']
+
+        edge_labels = {(u, v, k): d['label'] for u, v, k, d in G.edges(keys=True, data=True)}
+        nx.draw_networkx_edge_labels(G, pos, label_pos=0.15, edge_labels=edge_labels)
         
-        nx.draw_networkx_edges(G, pos, arrowstyle='->', arrowsize=20)
-        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+        
+        # nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
 
         
         plt.axis('off')
