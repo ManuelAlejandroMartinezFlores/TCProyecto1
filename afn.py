@@ -1,19 +1,37 @@
-from lab2_ejercicioc import * 
+from infix2postfix import * 
 
 from collections import deque
 import networkx as nx
 import matplotlib.pyplot as plt
 
+EPSILON = "ε"
+
+from random import randint
+
 class State:
     """Represents a state in the NFA"""
     def __init__(self, label=None):
-        self.label = label  
+        self.label = label
         self.transitions = {}  
         self.epsilon_transitions = set() 
         self.id = id(self)
     
     def __repr__(self):
         return f"State({self.label})"
+    
+def _epsilon_closure(states):
+    """Epsilon cerradura"""
+    closure = set(states)
+    stack = list(states)
+    
+    while stack:
+        state = stack.pop()
+        for eps_state in state.epsilon_transitions:
+            if eps_state not in closure:
+                closure.add(eps_state)
+                stack.append(eps_state)
+    
+    return closure
 
 class NFA:
     """Represents an NFA with start and accept states"""
@@ -86,7 +104,11 @@ class NFA:
             nfa_child.accept.epsilon_transitions.add(accept)
             
             return NFA(start, accept)
-        
+        elif node.value == EPSILON:
+            start = State('epsilon_start')
+            accept = State('epsilon_accept')
+            start.epsilon_transitions.add(accept)
+            return NFA(start, accept)
         else:
             start = State('char_start')
             accept = State('char_accept')
@@ -95,7 +117,7 @@ class NFA:
     
     def simulate(self, input_string):
         """Simula el automata"""
-        current_states = self._epsilon_closure({self.start})
+        current_states = _epsilon_closure({self.start})
         
         for char in input_string:
             next_states = set()
@@ -103,26 +125,13 @@ class NFA:
                 if char in state.transitions:
                     next_states.update(state.transitions[char])
             
-            current_states = self._epsilon_closure(next_states)
+            current_states = _epsilon_closure(next_states)
             
             if not current_states:
                 return False
         
         return any(state == self.accept for state in current_states)
     
-    def _epsilon_closure(self, states):
-        """Epsilon cerradura"""
-        closure = set(states)
-        stack = list(states)
-        
-        while stack:
-            state = stack.pop()
-            for eps_state in state.epsilon_transitions:
-                if eps_state not in closure:
-                    closure.add(eps_state)
-                    stack.append(eps_state)
-        
-        return closure
     
     def to_graph(self):
         """AFN a grafo de NetworkX"""
@@ -140,7 +149,7 @@ class NFA:
             
             # Add epsilon transitions
             for eps_state in state.epsilon_transitions:
-                G.add_edge(state.id, eps_state.id, label='ε')
+                G.add_edge(state.id, eps_state.id, label=EPSILON)
                 if eps_state.id not in visited:
                     stack.append(eps_state)
             
@@ -157,7 +166,7 @@ class NFA:
         """Visualizar"""
         G = self.to_graph()
         
-        pos = nx.kamada_kawai_layout(G)
+        pos = nx.spring_layout(G)
         
         node_colors = []
         for node in G.nodes():
@@ -217,6 +226,8 @@ def regex_to_nfa(postfix_regex):
     tree = postfix_to_tree(postfix_regex)
     return NFA.from_regex_node(tree)
 
+
+
 # Example usage:
 if __name__ == "__main__":
     filename = input("Nombre del archivo: ")
@@ -231,14 +242,17 @@ if __name__ == "__main__":
                         print(f"Original: {line}")
                         print(f"Postfix: {postfix}")
                         nfa = regex_to_nfa(postfix)
-                        nfa.plot()
+                        # nfa.plot()
                         while True:
-                            ex = input("Expresión: ")
-                            if ex == "":
+                            try:
+                                ex = input("Expresión: ")
+                                if ex == '':
+                                    break
+                                print(f'AFN: {nfa.simulate(ex)}')
+                            except Exception as e:
                                 break
-                            print(nfa.simulate(ex))
                     except ValueError as e:
                         print(f"Expresión regular inválida: {e}")
-                    print("="*50)
+                    print('\n'+"="*50)
     except FileNotFoundError:
         print(f"Error: File '{filename}' not found.")
