@@ -11,10 +11,10 @@ from random import randint
 class State:
     """Represents a state in the NFA"""
     def __init__(self, label=None):
-        self.label = label
         self.transitions = {}  
         self.epsilon_transitions = set() 
         self.id = id(self)
+        self.label =  '_'.join([label, str(self.id), str(randint(1, 999999))])
     
     def __repr__(self):
         return f"State({self.label})"
@@ -181,9 +181,12 @@ class NFA:
 
         nx.draw_networkx_edges(G, pos, arrowstyle='->', arrowsize=20, connectionstyle='arc3,rad=0.2')
         
-
+        label_pos = [0.3, 0.1, 0.2] 
         edge_labels = {(u, v, k): d['label'] for u, v, k, d in G.edges(keys=True, data=True)}
-        nx.draw_networkx_edge_labels(G, pos, label_pos=0.15, edge_labels=edge_labels)
+        for i, ((u, v, k), label) in enumerate(edge_labels.items()):
+            nx.draw_networkx_edge_labels(G, pos, {(u, v, k): label}, 
+                                label_pos=label_pos[i % len(label_pos)])
+        # nx.draw_networkx_edge_labels(G, pos, label_pos=0.15, edge_labels=edge_labels)
         
         
         # nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)

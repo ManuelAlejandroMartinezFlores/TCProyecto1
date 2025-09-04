@@ -3,7 +3,7 @@ from afn import _epsilon_closure
 
 
 def gen_label(states):
-    labels = [str(state.id) for state in states]
+    labels = [state.label for state in states]
     labels.sort()
     return '='.join(labels) 
 
@@ -13,7 +13,7 @@ class AFDState:
         self.label = gen_label(self.afn_states)
         self.transitions = {}
         self.new = True
-        self.accept = accept_state in self.afn_states
+        self.accept = accept_state in self.afn_states if accept_state else False
 
     def _get_transitions(self, existing, accept_state):
         for state in self.afn_states:
@@ -24,7 +24,7 @@ class AFDState:
                     self.transitions[char] = _epsilon_closure(state.transitions[char])
 
         for char in self.transitions:
-            label = gen_label(self.transitions[char])
+            label = gen_label(_epsilon_closure(self.transitions[char]))
             if label in existing:
                 self.transitions[char] = existing[label]
             else:
@@ -65,7 +65,7 @@ class AFD:
             for labelq, q in self.nodes.items():
                 if labelq <= labelp:
                     continue
-                table[labelp][labelq] = (p.accept and not q.accept) or (q.accept and not p.accept)
+                table[labelp][labelq] = (p.accept != q.accept)
 
         new_added = True 
         while new_added:
@@ -75,46 +75,60 @@ class AFD:
                     if table[labelp][labelq]:
                         continue
                     for char in alphabet:
-                        if (char in self.nodes[labelp].transitions) != (char in self.nodes[labelq].transitions):
+                        ptransition = char in self.nodes[labelp].transitions
+                        qtransition = char in self.nodes[labelq].transitions
+                        if ptransition != qtransition:
                             new_added = True 
                             table[labelp][labelq] = True
                             break
-                        if char in self.nodes[labelp].transitions:
+                        if ptransition:
                             labelpp = self.nodes[labelp].transitions[char].label
                             labelqp = self.nodes[labelq].transitions[char].label
-                            labelpp = min(labelpp, labelqp)
-                            labelqp = max(labelpp, labelqp)
+                            min_label = min(labelpp, labelqp)
+                            max_label = max(labelpp, labelqp)
                             if labelpp == labelqp:
                                 continue
-                            if table[labelpp][labelqp]:
+                            if table[min_label][max_label]:
                                 new_added = True
                                 table[labelp][labelq] = True 
                                 break 
                             
-
-        representant = {}
-        labels = list(table.keys())
-        labels.sort()
-        for labelp in labels:
+        parent = {label: label for label in self.nodes}
+        def find(x):
+            if parent[x] != x:
+                parent[x] = find(parent[x])
+            return parent[x]
+        
+        for labelp in table:
             for labelq, dist in table[labelp].items():
                 if not dist:
-                    representant[labelq] = representant.get(labelp, labelp)
-            representant[labelp] = representant.get(labelp, labelp)
+                    rootp = find(labelp)
+                    rootq = find(labelq)
+                    if rootp != rootq:
+                        parent[rootq] = rootp
 
-        for label, node in self.nodes.items():
-            for labelp, repr in representant.items():
-                if repr == label and self.nodes[labelp].accept:
-                    node.accept = True 
-                    break
+        representative = {label: find(label) for label in self.nodes}
+
+        new_nodes = {}
+        for repr in set(representative.values()):
+            node = AFDState({}, None)
+            node.label = repr 
+            new_nodes[repr] = node
+            
+        for label, repr in representative.items():
+            node = self.nodes[label]
+            representant = new_nodes[repr]
+            representant.accept = (node.accept or representant.accept)
             for char, state in node.transitions.items():
-                node.transitions[char] = self.nodes[representant[state.label]] 
+                representant.transitions[char] = new_nodes[representative[state.label]] 
 
-        self.start = self.nodes[representant[self.start.label]]
+        self.start = new_nodes[representative[self.start.label]]
+        self.nodes = new_nodes
         self.min = True
                 
     
     def to_graph(self):
-        G = nx.DiGraph()
+        G = nx.MultiDiGraph()
         stack = [self.start]
         visited = set()
 
@@ -125,7 +139,8 @@ class AFD:
             for char, state in current.transitions.items():
                 G.add_edge(current.label, state.label, label=char)
                 if state.label not in visited:
-                    stack.append(state)
+                    if state.label != current.label:
+                        stack.append(state)
                     visited.add(state.label)
         return G
     
@@ -146,12 +161,13 @@ class AFD:
         
         nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=300)
         
-        edge_labels = {}
-        for u, v, data in G.edges(data=True):
-            edge_labels[(u, v)] = data['label']
         
         nx.draw_networkx_edges(G, pos, arrowstyle='->', arrowsize=20, connectionstyle='arc3,rad=0.2')
-        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, label_pos=0.15)
+        label_pos = [0.3, 0.15, 0.25, 0.1, 0.2] 
+        edge_labels = {(u, v, k): d['label'] for u, v, k, d in G.edges(keys=True, data=True)}
+        for i, ((u, v, k), label) in enumerate(edge_labels.items()):
+            nx.draw_networkx_edge_labels(G, pos, {(u, v, k): label}, 
+                                label_pos=label_pos[i % len(label_pos)])
 
         
         plt.axis('off')
